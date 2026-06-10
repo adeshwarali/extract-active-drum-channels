@@ -118,3 +118,5 @@ The `.ablx` is written to the project root. `npm start` hot-loads a dev build in
 ## Credits
 
 Built by **Ali** with the [Ableton Extensions SDK](https://ableton.github.io/extensions-sdk/). Beta software — feedback and PRs welcome. Not affiliated with Ableton.
+
+Source code is **MIT licensed** (see [`LICENSE`](LICENSE)). The bundled Ableton Extensions SDK remains © Ableton AG under its own license.
