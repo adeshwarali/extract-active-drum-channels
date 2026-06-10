@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extract Active Drum Channels</title>
+  <script>
+    // The extension replaces the literal between the two DATA markers below with
+    // a JSON object: { trackName, groupName, pads: string[] }.
+    const DATA = /*DATA*/{ "trackName": "Drums", "groupName": null, "pads": [] }/*DATA*/;
+
+    const isWebKit = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live;
+    const isWebView2 = window.chrome && window.chrome.webview;
+
+    function send(message) {
+      if (isWebKit) window.webkit.messageHandlers.live.postMessage(message);
+      else if (isWebView2) window.chrome.webview.postMessage(message);
+    }
+
+    function closeWith(result) {
+      send({ method: "close_and_send", params: [JSON.stringify(result)] });
+    }
+
+    function cancel() { closeWith({ confirmed: false }); }
+
+    function confirm() {
+      const deleteSource = document.querySelector('input[name="source"]:checked').value === "delete";
+      closeWith({ confirmed: true, deleteSource });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const count = DATA.pads.length;
+      document.getElementById('headline').textContent =
+        `Extract ${count} drum${count === 1 ? '' : 's'} from “${DATA.trackName}”`;
+
+      document.getElementById('subline').textContent = DATA.groupName
+        ? `New tracks will stay inside the group “${DATA.groupName}”.`
+        : `This track isn’t in a group, so the new tracks land at the top level.`;
+
+      const list = document.getElementById('pads');
+      for (const label of DATA.pads) {
+        const li = document.createElement('li');
+        li.textContent = label;
+        list.appendChild(li);
+      }
+
+      document.getElementById('extract').focus();
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') confirm();
+        if (e.key === 'Escape') cancel();
+      });
+    });
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    *:not(dialog) { margin: 0; }
+    input, button { font: inherit; }
+
+    :root {
+      --p-live-ui-bg: hsl(0, 0%, 21%);
+      --p-live-control-bg: hsl(0, 0%, 16%);
+      --p-live-input-bg: hsl(0, 0%, 12%);
+      --p-live-text-primary: hsl(0, 0%, 71%);
+      --p-live-control-border: hsl(0, 0%, 7%);
+      --p-live-text-secondary: hsl(0, 0%, 41%);
+      --p-live-accent-primary: hsl(31, 100%, 67%);
+      --p-live-control-text--enabled: hsl(0, 0%, 7%);
+
+      --c-bg--0500: oklch(from var(--p-live-ui-bg) l c h);
+      --c-text-primary: oklch(from var(--p-live-text-primary) l c h);
+      --c-text-secondary: oklch(from var(--p-live-text-secondary) l c h);
+      --c-control-bg--400: oklch(from var(--p-live-control-bg) calc(l * 0.9) c h);
+      --c-control-bg--500: oklch(from var(--p-live-control-bg) l c h);
+      --c-control-border: oklch(from var(--p-live-control-border) l c h);
+      --c-control-outline: var(--c-text-secondary);
+      --c-control-on-foreground: oklch(from var(--p-live-control-text--enabled) l c h);
+      --c-input-bg-500: oklch(from var(--p-live-input-bg) l c h);
+      --c-highlight--primary: oklch(from var(--p-live-accent-primary) l c h);
+    }
+
+    html {
+      background-color: var(--c-bg--0500);
+      color: var(--c-text-primary);
+      font-family: "AbletonSansSmall", sans-serif;
+      font-size: 11.5px;
+      font-weight: 500;
+      -webkit-font-smoothing: antialiased;
+      height: 100%;
+    }
+
+    body { height: 100%; display: flex; padding: 1.25em; }
+
+    .panel { display: flex; flex-direction: column; gap: 0.85em; width: 100%; }
+
+    .headline { font-size: 1.25rem; line-height: 1.2; color: var(--c-text-primary); }
+    .subline { color: var(--c-text-secondary); line-height: 1.35; }
+
+    .pads {
+      list-style: none;
+      padding: 0.5em;
+      margin: 0;
+      background-color: var(--c-input-bg-500);
+      border: 1px solid var(--c-control-border);
+      max-height: 9.5em;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15em;
+    }
+    .pads li { line-height: 1.5; }
+    .pads li::before { content: "▸ "; color: var(--c-highlight--primary); }
+
+    .section-label { color: var(--c-text-secondary); }
+
+    .choices { display: flex; flex-direction: column; gap: 0.35em; }
+    .choice { display: flex; align-items: baseline; gap: 0.5em; cursor: pointer; }
+    .choice input { accent-color: var(--c-highlight--primary); }
+    .choice .hint { color: var(--c-text-secondary); }
+
+    .buttons { display: flex; gap: 0.5em; justify-content: flex-end; margin-top: 0.25em; }
+
+    .alx-button {
+      font-size: 1rem;
+      line-height: 1;
+      background-color: var(--c-control-bg--500);
+      color: var(--c-text-primary);
+      border: 1px solid var(--c-control-border);
+      height: 22px;
+      padding: 0 1em;
+      border-radius: 1em;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .alx-button:hover { background-color: var(--c-control-bg--400); }
+    .alx-button:active, .alx-button.primary {
+      color: var(--c-control-on-foreground);
+      background-color: var(--c-highlight--primary);
+    }
+    .alx-button:focus { outline: 2px solid var(--c-control-outline); }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <div class="headline" id="headline">Extract drums</div>
+    <div class="subline" id="subline"></div>
+
+    <ul class="pads" id="pads"></ul>
+
+    <div class="section-label">When done, the original Drum Rack track should be:</div>
+    <div class="choices">
+      <label class="choice">
+        <input type="radio" name="source" value="mute" checked />
+        <span>Muted <span class="hint">— kept but silenced (non-destructive)</span></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="source" value="delete" />
+        <span>Deleted <span class="hint">— removed entirely</span></span>
+      </label>
+    </div>
+
+    <div class="buttons">
+      <button class="alx-button" onclick="cancel()">Cancel</button>
+      <button class="alx-button primary" id="extract" onclick="confirm()">Extract</button>
+    </div>
+  </div>
+</body>
+
+</html>

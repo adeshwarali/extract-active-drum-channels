@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+
+# Never publish the Ableton Extensions SDK itself — its license allows shipping
+# the SDK only *inside* your built application (the .ablx), not on its own.
+vendor/
+*.tgz
