@@ -13,6 +13,7 @@ Producers have wanted a quick way to break a Drum Rack out into per-drum tracks 
 - It only extracts pads you **actually played** — no clutter of empty tracks.
 - It **keeps the new tracks in the same group** as the original, so your drum bus keeps working.
 - It names each track after the **sample loaded on the pad**, renames the clips to match, and gives each drum a **distinct color**.
+- It can **keep choke-grouped pads together** — link pads (e.g. open + closed hi-hat) so they extract to one track and their choke still functions.
 
 ---
 
@@ -42,12 +43,11 @@ To remove it later: **Settings → Extensions → Extract Active Drum Channels �
    - the **Drum Rack** device itself (its title bar), or
    - the **MIDI track** header that hosts it, or
    - a **MIDI clip** on that track.
-3. A dialog lists the drums it found and lets you choose what happens to the original track:
-   - **Muted** *(default, non-destructive)* — kept but silenced.
-   - **Deleted** — removed entirely.
-4. Click **Extract**. A progress bar shows each drum being separated.
+3. A dialog lists the drums it found. Optionally **keep choke-grouped pads together**: click two or more pads to select them, then **Link selected** — linked pads extract onto **one shared track** so their choke group keeps working (e.g. open + closed hi-hat). The status line shows `N drums → M tracks`. Use **Unlink** to undo.
+4. Choose what happens to the original track — **Muted** *(default, non-destructive)* or **Deleted**.
+5. Click **Extract**. A progress bar shows each drum being separated.
 
-That's it — you'll have one track per drum, sitting in the same group, each named after its sample.
+That's it — you'll have one track per drum (or per linked group), sitting in the same group, each named after its sample.
 
 ---
 
@@ -83,6 +83,7 @@ The extension stops at clean, isolated **MIDI tracks**. If you want to go furthe
 - **Each extracted track still contains the whole Drum Rack**, with just one pad making sound. That's heavier than moving a single instrument out, but it's what guarantees the sound is identical — and it's the only approach the beta SDK allows.
 - **Naming:** works best with **Simpler**-based pads (factory drum racks, sampled kits). For **Sampler** pads the SDK doesn't expose the sample path, so it falls back to the device name (usually still the sample name). Pads with no instrument get named `Drum`.
 - **Blank clips are left, not auto-deleted.** Where a drum is silent in a clip, that clip stays blank. The SDK's arrangement note reads aren't reliably scoped per clip, so automatically deleting "empty" clips risked dropping clips that *did* contain notes — losing MIDI. Leaving blanks (delete them by hand) is the safe choice; lost notes aren't.
+- **Choke groups: link the pads to keep them working.** A choke group only works *within one Drum Rack*, so splitting pads onto separate tracks breaks it. The SDK can't read choke assignments (so it can't auto-detect them) — but if you **Link** the relevant pads in the dialog, they share a track and the choke keeps firing. The classic case is open + closed hi-hat.
 - **Colors land on clips, not track headers.** The SDK can set a *clip's* color but has no track-color property, so each extracted track's **clips** are recolored while the **track header** keeps the source rack's color. Recoloring the headers to match is a quick manual step in Live (right-click a track → pick a color).
 - **No MIDI clip = nothing to extract.** "Active" is defined by the notes in your clips.
 

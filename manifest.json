@@ -2,6 +2,6 @@
     "name": "Extract Active Drum Channels",
     "author": "Ali",
     "entry": "dist/extension.js",
-    "version": "0.1.1",
+    "version": "0.2.0",
     "minimumApiVersion": "1.0.0"
 }

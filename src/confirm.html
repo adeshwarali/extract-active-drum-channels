@@ -7,7 +7,7 @@
   <title>Extract Active Drum Channels</title>
   <script>
     // The extension replaces the literal between the two DATA markers below with
-    // a JSON object: { trackName, groupName, pads: string[] }.
+    // a JSON object: { trackName, groupName, pads: [{ label, note }] }.
     const DATA = /*DATA*/{ "trackName": "Drums", "groupName": null, "pads": [] }/*DATA*/;
 
     const isWebKit = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live;
@@ -17,34 +17,102 @@
       if (isWebKit) window.webkit.messageHandlers.live.postMessage(message);
       else if (isWebView2) window.chrome.webview.postMessage(message);
     }
-
     function closeWith(result) {
       send({ method: "close_and_send", params: [JSON.stringify(result)] });
     }
-
     function cancel() { closeWith({ confirmed: false }); }
+
+    // --- Grouping state ---------------------------------------------------
+    // Each pad starts in its own group. Linking two or more selected pads gives
+    // them a shared group id, so they extract onto one track (choke preserved).
+    const pads = DATA.pads || [];
+    const groupId = pads.map((_, i) => i);
+    let nextId = pads.length;
+    const selected = new Set();
+
+    const GROUP_COLORS = ["#ff8a3d", "#3dc6ff", "#5fd06b", "#ff5fa8", "#ffd23d", "#b78bff", "#54e0c7", "#ff6f6f"];
+
+    function groupsMap() {
+      const m = new Map();
+      groupId.forEach((g, i) => { (m.get(g) || m.set(g, []).get(g)).push(i); });
+      return m;
+    }
+
+    function render() {
+      const m = groupsMap();
+      // Assign a colour to each multi-pad group, ordered by first member.
+      const colorOf = new Map();
+      let ci = 0;
+      [...m.entries()].sort((a, b) => Math.min(...a[1]) - Math.min(...b[1])).forEach(([g, members]) => {
+        if (members.length > 1) colorOf.set(g, GROUP_COLORS[ci++ % GROUP_COLORS.length]);
+      });
+
+      const list = document.getElementById('pads');
+      list.innerHTML = '';
+      pads.forEach((pad, i) => {
+        const g = groupId[i];
+        const linked = m.get(g).length > 1;
+        const row = document.createElement('div');
+        row.className = 'pad' + (selected.has(i) ? ' selected' : '') + (linked ? ' linked' : '');
+        if (linked) row.style.borderLeftColor = colorOf.get(g);
+
+        const name = document.createElement('span');
+        name.className = 'pad-name';
+        name.textContent = pad.label;
+        row.appendChild(name);
+
+        if (linked) {
+          const tag = document.createElement('span');
+          tag.className = 'pad-tag';
+          tag.textContent = 'linked';
+          tag.style.color = colorOf.get(g);
+          row.appendChild(tag);
+        }
+
+        row.onclick = () => {
+          if (selected.has(i)) selected.delete(i); else selected.add(i);
+          render();
+        };
+        list.appendChild(row);
+      });
+
+      document.getElementById('link').disabled = selected.size < 2;
+      document.getElementById('unlink').disabled =
+        ![...selected].some((i) => m.get(groupId[i]).length > 1);
+
+      const tracks = m.size;
+      document.getElementById('status').textContent =
+        `${pads.length} drum${pads.length === 1 ? '' : 's'} → ${tracks} track${tracks === 1 ? '' : 's'}`;
+    }
+
+    function linkSelected() {
+      if (selected.size < 2) return;
+      const id = nextId++;
+      selected.forEach((i) => { groupId[i] = id; });
+      selected.clear();
+      render();
+    }
+    function unlinkSelected() {
+      selected.forEach((i) => { groupId[i] = nextId++; });
+      selected.clear();
+      render();
+    }
 
     function confirm() {
       const deleteSource = document.querySelector('input[name="source"]:checked').value === "delete";
-      closeWith({ confirmed: true, deleteSource });
+      const groups = [...groupsMap().values()].map((members) => members.map((i) => pads[i].note));
+      closeWith({ confirmed: true, deleteSource, groups });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-      const count = DATA.pads.length;
+      const count = pads.length;
       document.getElementById('headline').textContent =
         `Extract ${count} drum${count === 1 ? '' : 's'} from “${DATA.trackName}”`;
-
       document.getElementById('subline').textContent = DATA.groupName
         ? `New tracks will stay inside the group “${DATA.groupName}”.`
         : `This track isn’t in a group, so the new tracks land at the top level.`;
 
-      const list = document.getElementById('pads');
-      for (const label of DATA.pads) {
-        const li = document.createElement('li');
-        li.textContent = label;
-        list.appendChild(li);
-      }
-
+      render();
       document.getElementById('extract').focus();
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') confirm();
@@ -91,34 +159,49 @@
 
     body { height: 100%; display: flex; padding: 1.25em; }
 
-    .panel { display: flex; flex-direction: column; gap: 0.85em; width: 100%; }
+    .panel { display: flex; flex-direction: column; gap: 0.7em; width: 100%; }
 
     .headline { font-size: 1.25rem; line-height: 1.2; color: var(--c-text-primary); }
     .subline { color: var(--c-text-secondary); line-height: 1.35; }
 
     .pads {
-      list-style: none;
-      padding: 0.5em;
-      margin: 0;
+      padding: 0.3em;
       background-color: var(--c-input-bg-500);
       border: 1px solid var(--c-control-border);
       max-height: 9.5em;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 0.15em;
+      gap: 0.1em;
     }
-    .pads li { line-height: 1.5; }
-    .pads li::before { content: "▸ "; color: var(--c-highlight--primary); }
+    .pad {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      line-height: 1.6;
+      padding: 0.1em 0.45em;
+      border-left: 3px solid transparent;
+      cursor: pointer;
+      user-select: none;
+    }
+    .pad:hover { background-color: var(--c-control-bg--500); }
+    .pad.selected { background-color: var(--c-control-bg--400); outline: 1px solid var(--c-control-outline); }
+    .pad-name::before { content: "▸ "; color: var(--c-highlight--primary); }
+    .pad.linked .pad-name::before { content: ""; }
+    .pad-tag { font-size: 0.85em; margin-left: auto; }
+
+    .group-controls { display: flex; align-items: center; gap: 0.5em; }
+    .status { color: var(--c-text-secondary); margin-left: auto; }
 
     .section-label { color: var(--c-text-secondary); }
+    .section-label .hint { color: var(--c-text-secondary); opacity: 0.85; }
 
     .choices { display: flex; flex-direction: column; gap: 0.35em; }
     .choice { display: flex; align-items: baseline; gap: 0.5em; cursor: pointer; }
     .choice input { accent-color: var(--c-highlight--primary); }
     .choice .hint { color: var(--c-text-secondary); }
 
-    .buttons { display: flex; gap: 0.5em; justify-content: flex-end; margin-top: 0.25em; }
+    .buttons { display: flex; gap: 0.5em; justify-content: flex-end; margin-top: 0.15em; }
 
     .alx-button {
       font-size: 1rem;
@@ -133,12 +216,14 @@
       user-select: none;
       white-space: nowrap;
     }
+    .alx-button.small { height: 19px; font-size: 0.9rem; padding: 0 0.8em; }
     .alx-button:hover { background-color: var(--c-control-bg--400); }
     .alx-button:active, .alx-button.primary {
       color: var(--c-control-on-foreground);
       background-color: var(--c-highlight--primary);
     }
     .alx-button:focus { outline: 2px solid var(--c-control-outline); }
+    .alx-button:disabled { opacity: 0.4; cursor: default; background-color: var(--c-control-bg--500); }
   </style>
 </head>
 
@@ -147,7 +232,13 @@
     <div class="headline" id="headline">Extract drums</div>
     <div class="subline" id="subline"></div>
 
-    <ul class="pads" id="pads"></ul>
+    <div class="section-label">Drums to extract <span class="hint">— select 2+ and Link to keep them on one track (preserves choke groups, e.g. open + closed hi-hat)</span></div>
+    <div class="pads" id="pads"></div>
+    <div class="group-controls">
+      <button class="alx-button small" id="link" onclick="linkSelected()">Link selected</button>
+      <button class="alx-button small" id="unlink" onclick="unlinkSelected()">Unlink</button>
+      <span class="status" id="status"></span>
+    </div>
 
     <div class="section-label">When done, the original Drum Rack track should be:</div>
     <div class="choices">

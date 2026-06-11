@@ -50,6 +50,13 @@ type Ctx = ExtensionContext<"1.0.0">;
 interface ConfirmResult {
   confirmed: boolean;
   deleteSource?: boolean;
+  /**
+   * How pads are grouped into output tracks, as arrays of trigger notes. Pads
+   * the user "links" (e.g. open + closed hi-hat) share a group so they extract
+   * to one track — keeping their Drum Rack choke group working. A lone pad is a
+   * group of one. Absent ⇒ one track per pad.
+   */
+  groups?: number[][];
 }
 
 const COMMAND_ID = "extractActiveDrumChannels.run";
@@ -110,17 +117,10 @@ async function run(context: Ctx, handle: Handle): Promise<void> {
     return;
   }
 
-  // Pre-compute a label, trigger note and colour for each pad before we touch
-  // anything. Colours are hue-spaced around the wheel from a random start, so
-  // the set looks random but no two drums clash.
-  const startHue = Math.random() * 360;
-  const pads = extractIndices.map((index, i) => {
+  // Pre-compute each active pad's trigger note and a sample-derived name.
+  const pads = extractIndices.map((index) => {
     const chain = chains[index]!;
-    const note = chain.receivingNote;
-    const name = padName(chain.devices) ?? "Drum";
-    const hue = (startHue + (i * 360) / extractIndices.length) % 360;
-    const color = hslToRgbInt(hue, 0.6, 0.55);
-    return { index, note, label: name, color };
+    return { index, note: chain.receivingNote, label: padName(chain.devices) ?? "Drum" };
   });
 
   const group = hostTrack.groupTrack;
@@ -129,11 +129,13 @@ async function run(context: Ctx, handle: Handle): Promise<void> {
       (group ? ` — keeping inside group "${group.name}".` : " — not in a group."),
   );
 
-  // Confirm with the user and let them choose how to treat the source track.
+  // Confirm with the user. They choose what happens to the source track and may
+  // "link" pads (e.g. open + closed hi-hat) so those extract onto one shared
+  // track — which keeps their Drum Rack choke group functioning.
   const choice = await confirmExtraction(context, {
     trackName: hostTrack.name,
     groupName: group ? group.name : null,
-    pads: pads.map((p) => p.label),
+    pads: pads.map((p) => ({ label: p.label, note: p.note })),
   });
   if (!choice.confirmed) {
     console.log("[Extract Drum Channels] Cancelled by user.");
@@ -141,33 +143,51 @@ async function run(context: Ctx, handle: Handle): Promise<void> {
   }
   const deleteSource = choice.deleteSource === true;
 
+  // Turn the grouping into output tracks. Each output is a set of pad notes that
+  // share one track (a lone pad is a set of one). Default ⇒ one track per pad.
+  const byNote = new Map(pads.map((p) => [p.note, p]));
+  const noteGroups: number[][] =
+    choice.groups && choice.groups.length > 0
+      ? choice.groups.map((g) => g.filter((n) => byNote.has(n))).filter((g) => g.length > 0)
+      : pads.map((p) => [p.note]);
+
+  // One colour per output track, hue-spaced from a random start.
+  const startHue = Math.random() * 360;
+  const outputs = noteGroups.map((notes, i) => {
+    const members = notes.map((n) => byNote.get(n)!);
+    return {
+      noteSet: new Set(notes),
+      label: members.map((p) => p.label).join(" + ") || "Drum",
+      color: hslToRgbInt((startHue + (i * 360) / noteGroups.length) % 360, 0.6, 0.55),
+    };
+  });
+
   await context.ui.withinProgressDialog(
     "Extracting drum channels…",
     { progress: 0 },
     async (update, signal) => {
-      // Isolate each pad onto its own MIDI track.
-      for (let i = 0; i < pads.length; i++) {
+      // Build one track per output (group of one or more pads).
+      for (let i = 0; i < outputs.length; i++) {
         signal.throwIfAborted();
-        const pad = pads[i]!;
-        await update(`Extracting ${pad.label}`, (i / pads.length) * 90);
+        const out = outputs[i]!;
+        await update(`Extracting ${out.label}`, (i / outputs.length) * 90);
 
         // Duplicate the host track. The copy lands right after the original,
         // inside the same group (if any).
         const dup = await context.application.song.duplicateTrack(hostTrack);
 
-        // Locate the same drum rack inside the duplicate, then strip every
-        // *other* loaded pad so its rack contains only this drum.
+        // Keep this output's pad(s); empty every other loaded pad. Keeping more
+        // than one pad in the rack is what preserves their choke group.
         const dupRack = resolveDrumRack(dup, rackPath);
         for (const other of deviceIndices) {
-          if (other === pad.index) continue;
+          if (out.noteSet.has(chains[other]!.receivingNote)) continue;
           await emptyChain(dupRack.chains[other]!);
         }
 
-        // Trim every MIDI clip to this pad's note, then name the track and match
-        // its clips' names and colour.
-        filterTrackNotes(dup, pad.note);
-        dup.name = pad.label;
-        nameAndColorClips(dup, pad.label, pad.color);
+        // Trim every MIDI clip to this output's note(s), then name + colour.
+        filterTrackNotes(dup, out.noteSet);
+        dup.name = out.label;
+        nameAndColorClips(dup, out.label, out.color);
       }
 
       // Apply the user's choice to the original track.
@@ -239,7 +259,11 @@ function locateDrumRack(
  */
 async function confirmExtraction(
   context: Ctx,
-  data: { trackName: string; groupName: string | null; pads: string[] },
+  data: {
+    trackName: string;
+    groupName: string | null;
+    pads: { label: string; note: number }[];
+  },
 ): Promise<ConfirmResult> {
   // Embed the data as a JS literal. Neutralise `<`/`>` so a stray "</script>"
   // in a track name can't break out of the inlined HTML.
@@ -253,7 +277,7 @@ async function confirmExtraction(
   const url = `data:text/html,${encodeURIComponent(html)}`;
 
   try {
-    const raw = await context.ui.showModalDialog(url, 400, 440);
+    const raw = await context.ui.showModalDialog(url, 420, 560);
     return JSON.parse(raw) as ConfirmResult;
   } catch (e) {
     console.warn("[Extract Drum Channels] Dialog dismissed:", e);
@@ -366,9 +390,9 @@ function collectTriggeredPitches(track: Track<"1.0.0">): Set<number> {
  * does contain notes — i.e. silently dropping MIDI. A leftover blank clip is
  * harmless and easy to delete by hand; lost notes are not. So we only trim.
  */
-function filterTrackNotes(track: Track<"1.0.0">, pitch: number): void {
+function filterTrackNotes(track: Track<"1.0.0">, pitches: Set<number>): void {
   for (const clip of midiClipsOf(track)) {
-    const notes = notesForPitch(clip, pitch);
+    const notes = notesForPitches(clip, pitches);
     if (notes !== null) {
       try { clip.notes = notes; } catch (e) {
         console.warn("[Extract Drum Channels] Failed to trim a clip:", e);
@@ -377,10 +401,10 @@ function filterTrackNotes(track: Track<"1.0.0">, pitch: number): void {
   }
 }
 
-/** Notes of `clip` matching `pitch`; null if the clip's notes can't be read. */
-function notesForPitch(clip: MidiClip<"1.0.0">, pitch: number): NoteDescription[] | null {
+/** Notes of `clip` whose pitch is in `pitches`; null if notes can't be read. */
+function notesForPitches(clip: MidiClip<"1.0.0">, pitches: Set<number>): NoteDescription[] | null {
   try {
-    return clip.notes.filter((note) => note.pitch === pitch);
+    return clip.notes.filter((note) => pitches.has(note.pitch));
   } catch (e) {
     console.warn("[Extract Drum Channels] Could not read a clip's notes:", e);
     return null;
