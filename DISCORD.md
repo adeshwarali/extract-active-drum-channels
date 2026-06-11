@@ -15,4 +15,4 @@ Install: Settings → Extensions → drag in the .ablx (or Choose file) → rest
 
 After extracting, go further with native Live: ⌘B Bounce to New Track to commit to audio, ⌘⇧G Ungroup to flatten the rack.
 
-⚠️ Save your Set first (it adds tracks + mutes/deletes the source). Beta — feedback welcome! 🙏
+⚠️ Save your Set first (it adds tracks + mutes/deletes the source). Beta — feedback welcome! 🙏🏾

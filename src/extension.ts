@@ -38,6 +38,7 @@ import {
   type ActivationContext,
   type Handle,
   type ExtensionContext,
+  type NoteDescription,
 } from "@ableton-extensions/sdk";
 
 // Inlined as a string by esbuild (see build.ts `loader: { ".html": "text" }`).
@@ -162,9 +163,9 @@ async function run(context: Ctx, handle: Handle): Promise<void> {
           await emptyChain(dupRack.chains[other]!);
         }
 
-        // Trim every MIDI clip to this pad's note — dropping any clip that ends
-        // up empty — then name the track and match its clips' names and colour.
-        await filterTrackNotes(dup, pad.note);
+        // Trim every MIDI clip to this pad's note, then name the track and match
+        // its clips' names and colour.
+        filterTrackNotes(dup, pad.note);
         dup.name = pad.label;
         nameAndColorClips(dup, pad.label, pad.color);
       }
@@ -355,47 +356,34 @@ function collectTriggeredPitches(track: Track<"1.0.0">): Set<number> {
 }
 
 /**
- * Trims every MIDI clip on a track to just `pitch`, and deletes any clip that
- * ends up empty — so an extracted drum track only keeps clips where that drum
- * actually plays, instead of leaving blank clips wherever it was silent.
+ * Trims every MIDI clip on a track down to just `pitch`, so each extracted drum
+ * track's clips contain only that drum's hits.
  *
- * Take-lane clips are trimmed but not deleted (the SDK exposes no take-lane clip
- * deletion); arrangement and session clips are deleted when empty.
+ * We deliberately do NOT delete clips that come out empty. The SDK's arrangement
+ * note reads aren't reliably scoped per clip (`clip.notes` returns the whole
+ * track's notes, and the note times don't line up cleanly with clip boundaries),
+ * so any automatic "this clip is empty" check risks deleting a clip that really
+ * does contain notes — i.e. silently dropping MIDI. A leftover blank clip is
+ * harmless and easy to delete by hand; lost notes are not. So we only trim.
  */
-async function filterTrackNotes(track: Track<"1.0.0">, pitch: number): Promise<void> {
-  const deletions: Promise<void>[] = [];
-
-  for (const clip of track.arrangementClips) {
-    if (clip instanceof MidiClip && filterClip(clip, pitch) === 0) {
-      deletions.push(track.deleteClip(clip));
+function filterTrackNotes(track: Track<"1.0.0">, pitch: number): void {
+  for (const clip of midiClipsOf(track)) {
+    const notes = notesForPitch(clip, pitch);
+    if (notes !== null) {
+      try { clip.notes = notes; } catch (e) {
+        console.warn("[Extract Drum Channels] Failed to trim a clip:", e);
+      }
     }
   }
-
-  for (const slot of track.clipSlots) {
-    const clip = slot.clip;
-    if (clip instanceof MidiClip && filterClip(clip, pitch) === 0) {
-      deletions.push(slot.deleteClip());
-    }
-  }
-
-  for (const lane of track.takeLanes) {
-    for (const clip of lane.clips) {
-      if (clip instanceof MidiClip) filterClip(clip, pitch);
-    }
-  }
-
-  await Promise.all(deletions);
 }
 
-/** Filters a clip's notes down to `pitch`; returns how many notes remain. */
-function filterClip(clip: MidiClip<"1.0.0">, pitch: number): number {
+/** Notes of `clip` matching `pitch`; null if the clip's notes can't be read. */
+function notesForPitch(clip: MidiClip<"1.0.0">, pitch: number): NoteDescription[] | null {
   try {
-    const kept = clip.notes.filter((note) => note.pitch === pitch);
-    clip.notes = kept;
-    return kept.length;
+    return clip.notes.filter((note) => note.pitch === pitch);
   } catch (e) {
-    console.warn(`[Extract Drum Channels] Could not filter notes on "${clip.name}":`, e);
-    return 1; // couldn't read it — treat as non-empty so we never delete blindly
+    console.warn("[Extract Drum Channels] Could not read a clip's notes:", e);
+    return null;
   }
 }
 

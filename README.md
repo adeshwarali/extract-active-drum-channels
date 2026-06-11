@@ -13,7 +13,6 @@ Producers have wanted a quick way to break a Drum Rack out into per-drum tracks 
 - It only extracts pads you **actually played** — no clutter of empty tracks.
 - It **keeps the new tracks in the same group** as the original, so your drum bus keeps working.
 - It names each track after the **sample loaded on the pad**, renames the clips to match, and gives each drum a **distinct color**.
-- It **deletes clips that end up empty**, so each track keeps clips only where its drum actually plays.
 
 ---
 
@@ -59,7 +58,7 @@ For every **active** pad — one that has a device loaded **and** is triggered b
 - plays **only that drum**, with the pad's **full original signal chain** intact (it still runs through the Drum Rack, so every pad effect, send, and macro is preserved — it sounds identical), and
 - has its clips **trimmed to that pad's note**, so the track's MIDI contains only that drum's hits.
 
-Any clip that ends up **empty** after trimming (a clip where that drum never played) is **deleted**, so each track keeps clips only where its drum actually plays — no blank clips cluttering the arrangement.
+Where a drum doesn't play in a particular clip, that clip is left **blank** (the extension never deletes clips — see *Good to know*). Just delete blank clips by hand if you want a tidier arrangement.
 
 Loaded-but-unplayed pads, and notes that hit empty pads, are ignored. If the source track is in a group, the new tracks land **inside that same group**. The original track is then muted (or deleted, your choice).
 
@@ -83,6 +82,7 @@ The extension stops at clean, isolated **MIDI tracks**. If you want to go furthe
 - **Save your Set first.** This adds tracks and mutes/deletes the original. Undo works, but it's a sequence of steps (the SDK can't batch them into one undo), so a quick save is the easy safety net.
 - **Each extracted track still contains the whole Drum Rack**, with just one pad making sound. That's heavier than moving a single instrument out, but it's what guarantees the sound is identical — and it's the only approach the beta SDK allows.
 - **Naming:** works best with **Simpler**-based pads (factory drum racks, sampled kits). For **Sampler** pads the SDK doesn't expose the sample path, so it falls back to the device name (usually still the sample name). Pads with no instrument get named `Drum`.
+- **Blank clips are left, not auto-deleted.** Where a drum is silent in a clip, that clip stays blank. The SDK's arrangement note reads aren't reliably scoped per clip, so automatically deleting "empty" clips risked dropping clips that *did* contain notes — losing MIDI. Leaving blanks (delete them by hand) is the safe choice; lost notes aren't.
 - **Colors land on clips, not track headers.** The SDK can set a *clip's* color but has no track-color property, so each extracted track's **clips** are recolored while the **track header** keeps the source rack's color. Recoloring the headers to match is a quick manual step in Live (right-click a track → pick a color).
 - **No MIDI clip = nothing to extract.** "Active" is defined by the notes in your clips.
 
