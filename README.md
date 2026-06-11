@@ -1,4 +1,4 @@
-# Extract Active Drum Channels 🥁
+# Extract Active Drum Rack Channels 🥁
 
 **A Live 12 extension that splits a Drum Rack's active pads onto separate tracks — in one click, while keeping them inside your group bus.**
 
