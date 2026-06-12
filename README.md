@@ -26,7 +26,7 @@ Producers have wanted a quick way to break a Drum Rack out into per-drum tracks 
 
 ## Install
 
-1. Download `Extract-Active-Drum-Channels-0.1.0.ablx`.
+1. Download the latest `.ablx` from the [**Releases page**](https://github.com/adeshwarali/extract-active-drum-channels/releases/latest).
 2. In Live: **Settings → Extensions**.
 3. Either **drag the `.ablx` onto the "Drag and drop to install" area**, or click **Choose file** and select it.
 4. Live confirms the install and asks you to **restart**. Restart Live.

@@ -6,9 +6,10 @@ Ever wanted to explode a Drum Rack into separate per-drum tracks in one click? T
 ✅ Keeps the new tracks inside the same group as the original
 ✅ Each track keeps the pad's full signal chain (sounds identical)
 ✅ Tracks are named after the loaded sample
+✅ Link choke-grouped pads (e.g. open + closed hi-hat) to keep them on one track so the choke still works
 ✅ Original track gets muted (or deleted — your choice)
 
-How: right-click a Drum Rack (or its MIDI track / a MIDI clip) → Extensions → Extract to Separate Tracks → pick mute/delete → Extract.
+How: right-click a Drum Rack (or its MIDI track / a MIDI clip) → Extensions → Extract to Separate Tracks → (optional: select pads + Link) → pick mute/delete → Extract.
 
 Requires: Live 12 Suite Beta, 12.4.5+
 Install: Settings → Extensions → drag in the .ablx (or Choose file) → restart Live
